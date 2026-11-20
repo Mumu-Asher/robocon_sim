@@ -6,6 +6,7 @@
 """
 import os
 import re
+import tempfile
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -13,6 +14,27 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetE
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+
+def ascii_models_dir(models_dir):
+    """返回一个只含英文字符的目录，里面是指向 models/ 下各模型的符号链接。
+
+    为什么需要：Gazebo 处理含中文的路径会出错。实测工作区放在 ~/ROS2基础/ 下，Gazebo 看到的网格路径变成
+    "ROS2\\372@"，小车和场地的外观文件读不到，Gazebo 窗口里看不到小车（物理、雷达、TF 都正常，所以很隐蔽）。
+    交给 Gazebo 的路径一律走这个目录，工作区放在什么名字的目录下都能用。
+    符号链接不复制文件（小车网格有 43 MB），重复启动只会刷新链接。
+    """
+    stage = os.path.join(tempfile.gettempdir(), 'robocon_sim_%d' % os.getuid())
+    os.makedirs(stage, exist_ok=True)
+    for name in os.listdir(models_dir):
+        src = os.path.realpath(os.path.join(models_dir, name))
+        dst = os.path.join(stage, name)
+        if os.path.islink(dst):
+            if os.path.realpath(dst) == src:
+                continue
+            os.unlink(dst)               # 只删链接本身，不碰目标
+        os.symlink(src, dst)
+    return stage
 
 
 def build_robot_description(share_dir):
@@ -26,8 +48,8 @@ def build_robot_description(share_dir):
     urdf = re.sub(r'^\s*<\?xml[^>]*\?>', '', urdf)
 
     # 加工 1：mesh 路径。br.urdf 里写的是相对路径 "meshes/xxx.STL"，
-    # Gazebo 不知道相对谁，必须换成绝对的 file:// 路径。
-    mesh_root = os.path.join(models_dir, 'robot_urdf', 'meshes')
+    # Gazebo 不知道相对谁，必须换成绝对的 file:// 路径，并且路径里不能有中文（见 ascii_models_dir）。
+    mesh_root = os.path.join(ascii_models_dir(models_dir), 'robot_urdf', 'meshes')
     urdf = urdf.replace('filename="meshes/', f'filename="file://{mesh_root}/')
 
     # 加工 2：冻结舵轮转向和伸缩机构。仿真里没有控制器，
@@ -57,10 +79,10 @@ def generate_launch_description():
         DeclareLaunchArgument('yaw', default_value='0.0', description='小车出生朝向'),
     ]
 
-    # 让 Gazebo 找得到 model://robocon_ground
+    # 让 Gazebo 找得到 model://robocon_ground。同样走纯英文路径，原因见 ascii_models_dir。
     model_path = SetEnvironmentVariable(
         'GAZEBO_MODEL_PATH',
-        models_dir + os.pathsep + os.environ.get('GAZEBO_MODEL_PATH', ''))
+        ascii_models_dir(models_dir) + os.pathsep + os.environ.get('GAZEBO_MODEL_PATH', ''))
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(gazebo_dir, 'launch', 'gazebo.launch.py')),
