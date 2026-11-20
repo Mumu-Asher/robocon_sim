@@ -20,10 +20,27 @@ sudo apt install ros-humble-gazebo-ros-pkgs ros-humble-nav2-bringup ros-humble-s
 
 - 生成导航地图的脚本需要 Python 的 `numpy` 和 `Pillow`（`pip install numpy pillow` 或 `apt install python3-numpy python3-pil`）。
 
+## 已知限制
+
+完整列表和实测数据见 [KNOWN_ISSUES.md](KNOWN_ISSUES.md)，这里列最影响使用的：
+
+1. **仿真里不能用 AMCL**。小车出生点只能看到中央高台的一面直墙，沿墙方向的位置分不出来，AMCL 的估计和真实位置相差 1.4 到 3.5 m。**上真车必须换回 AMCL 或 SLAM Toolbox 的定位模式**，并且要选一个能同时看到两面不平行墙的出生点。
+2. **边界墙雷达看不到**（墙只有 0.08 m 高，扫描面离地约 0.23 m）。试过把扫描面降低，车体会挡住 72% 的射线，建图失败。
+3. **NavFn 规划器会整体失效，已换成 Smac 2D**（见[导航](#3-导航)）。换了之后在自己的仿真里没再出现规划失败，但**失效原因没有查清**，也没有和 NavFn 在更多场景下对比。如果以后又出现 `Goal failed`，先用第 1 课的诊断顺序查，再考虑别的原因。
+4. IMU 的 z 加速度噪声大，现在没用到；做 FAST-LIO2 前要先解决。
+
 ## 快速开始
+创建工作区
 
 ```bash
-cd ros2_ws
+cd ~ && mkdir ros2_ws 
+cd ~/ros2_ws && mkdir src 
+cd ~/ros2_ws/src 
+git clone https://github.com/Mumu-Asher/robocon_sim.git # 克隆
+```
+构建
+```bash
+cd ~/ros2_ws
 source /opt/ros/humble/setup.bash
 colcon build
 source install/setup.bash
@@ -156,14 +173,6 @@ robocon_sim/                  ROS 2 包（整个 ros2_ws 可以单独拷贝，�
 - **雷达**：MID360 的位置上放一个 2D 一圈扫描，输出 `/scan`，不是真正的 3D 点云。
 - **定位**：导航时 `map→odom` 恒等。仿真里程计读的是 Gazebo 的真值，不会漂。
 
-## 已知限制
-
-完整列表和实测数据见 [KNOWN_ISSUES.md](KNOWN_ISSUES.md)，这里列最影响使用的：
-
-1. **仿真里不能用 AMCL**。小车出生点只能看到中央高台的一面直墙，沿墙方向的位置分不出来，AMCL 的估计和真实位置相差 1.4 到 3.5 m。**上真车必须换回 AMCL 或 SLAM Toolbox 的定位模式**，并且要选一个能同时看到两面不平行墙的出生点。
-2. **边界墙雷达看不到**（墙只有 0.08 m 高，扫描面离地约 0.23 m）。试过把扫描面降低，车体会挡住 72% 的射线，建图失败。
-3. **NavFn 规划器会整体失效，已换成 Smac 2D**（见[导航](#3-导航)）。换了之后在自己的仿真里没再出现规划失败，但**失效原因没有查清**，也没有和 NavFn 在更多场景下对比。如果以后又出现 `Goal failed`，先用第 1 课的诊断顺序查，再考虑别的原因。
-4. IMU 的 z 加速度噪声大，现在没用到；做 FAST-LIO2 前要先解决。
 
 ## 常见问题
 
