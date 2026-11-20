@@ -1,0 +1,19 @@
+# SLAM Toolbox 建图参数。只写和默认值（mapper_params_online_async.yaml）不同的项，
+# 其余沿用 slam_toolbox 的默认值。参数含义见 https://github.com/SteveMacenski/slam_toolbox
+slam_toolbox:
+  ros__parameters:
+    # --- 坐标系：必须和我们的机器人对上 ---
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_link        # 默认是 base_footprint，我们的小车没有这个坐标系，不改就不出图
+    scan_topic: /scan
+    mode: mapping                # 建图。M4 导航时改成 localization
+
+    # --- 场地只有 11 m x 11 m，小车慢，所以更勤快地更新 ---
+    resolution: 0.05             # 栅格大小 5 cm
+    min_laser_range: 0.8         # 雷达会扫到小车自己的支撑臂和轮子（实测 0.21~0.68 m），在地图上
+                                 # 留下一串小黑点。0.8 m 内的返回一律丢弃；场地里最近的真实障碍 > 1.9 m
+    max_laser_range: 12.0        # 场地最大对角线约 15 m，12 m 够用，同时挡掉远处噪声
+    minimum_travel_distance: 0.2 # 默认 0.5，走够多远才处理一帧扫描
+    minimum_travel_heading: 0.3  # 默认 0.5，转够多大角度（弧度）才处理一帧
+    map_update_interval: 2.0     # 默认 5 s，多久刷新一次 /map，调小让 RViz 里地图长得更快

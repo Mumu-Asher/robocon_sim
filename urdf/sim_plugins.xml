@@ -1,0 +1,90 @@
+<!--
+  仿真专用的附加内容。launch 文件会把它插到 br.urdf 末尾的 </robot> 之前。
+  原始 br.urdf 保持不动：模型归模型，仿真插件归仿真。
+-->
+
+<!-- 1. 运动：planar_move 直接给车体设速度，订阅 /cmd_vel，发布 /odom 和 odom->base_link 的 TF。
+        舵轮底盘是全向的，所以 cmd_vel 的 x、y、yaw 都有效。
+        注意：cmd_vel 的 x 方向是 base_link 的 +X，车头是 +Y（见 models/robot_urdf/README.txt）。 -->
+<gazebo>
+  <plugin name="planar_move" filename="libgazebo_ros_planar_move.so">
+    <update_rate>100</update_rate>
+    <publish_rate>50</publish_rate>
+    <publish_odom>true</publish_odom>
+    <publish_odom_tf>true</publish_odom_tf>
+    <odometry_frame>odom</odometry_frame>
+    <robot_base_frame>base_link</robot_base_frame>
+    <!-- 插件改听 /cmd_vel_safe，由 cmd_vel_watchdog 节点从 /cmd_vel 转发（并负责超时停车） -->
+    <ros>
+      <remapping>cmd_vel:=cmd_vel_safe</remapping>
+    </ros>
+  </plugin>
+</gazebo>
+
+<!-- 2. 轮子关节状态：6 个 continuous 关节，让 robot_state_publisher 能算出轮子的 TF -->
+<gazebo>
+  <plugin name="joint_states" filename="libgazebo_ros_joint_state_publisher.so">
+    <update_rate>30</update_rate>
+    <joint_name>joint3_2_2</joint_name>
+    <joint_name>joint3_3_2</joint_name>
+    <joint_name>joint5_2_2</joint_name>
+    <joint_name>joint5_3_2</joint_name>
+    <joint_name>front_support_left_wheel_joint</joint_name>
+    <joint_name>front_support_right_wheel_joint</joint_name>
+  </plugin>
+</gazebo>
+
+<!-- 3. 雷达：2D 一圈扫描（/scan），挂在 MID360 的位置，扫描面离地约 0.23 m。
+        尝试过把扫描面降到 0.03 m 以便看到 0.08 m 高的边界墙，结论是不行：
+        车体在离地 0.01~0.13 m 的范围是实心的，72% 的射线被车自己挡住，地图撕裂成放射状长条。
+        所以边界墙看不见是这辆车的固有限制，定位不能依赖它们（见 docs/两周项目计划.md）。
+        后续要点云时，在这里把 vertical 改成多线，output_type 改成 sensor_msgs/PointCloud2。 -->
+        后续要点云时，在这里把 vertical 改成多线，output_type 改成 sensor_msgs/PointCloud2。 -->
+<gazebo reference="mid360_link">
+  <sensor name="mid360_scan" type="ray">
+    <always_on>true</always_on>
+    <visualize>false</visualize>
+    <update_rate>10</update_rate>
+    <ray>
+      <scan>
+        <horizontal>
+          <samples>720</samples>
+          <resolution>1</resolution>
+          <min_angle>-3.14159</min_angle>
+          <max_angle>3.14159</max_angle>
+        </horizontal>
+      </scan>
+      <range>
+        <min>0.15</min>
+        <max>20.0</max>
+        <resolution>0.01</resolution>
+      </range>
+      <noise>
+        <type>gaussian</type>
+        <mean>0.0</mean>
+        <stddev>0.01</stddev>
+      </noise>
+    </ray>
+    <plugin name="mid360_scan_plugin" filename="libgazebo_ros_ray_sensor.so">
+      <ros>
+        <remapping>~/out:=scan</remapping>
+      </ros>
+      <output_type>sensor_msgs/LaserScan</output_type>
+      <frame_name>mid360_link</frame_name>
+    </plugin>
+  </sensor>
+</gazebo>
+
+<!-- 4. IMU：MID360 自带 IMU，所以同样挂在 mid360_link 上，话题 /imu -->
+<gazebo reference="mid360_link">
+  <sensor name="mid360_imu" type="imu">
+    <always_on>true</always_on>
+    <update_rate>200</update_rate>
+    <plugin name="mid360_imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+      <ros>
+        <remapping>~/out:=imu</remapping>
+      </ros>
+      <initial_orientation_as_reference>false</initial_orientation_as_reference>
+    </plugin>
+  </sensor>
+</gazebo>

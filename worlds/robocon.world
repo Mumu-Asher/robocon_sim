@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- 世界 = 光照 + 场地。小车不写在这里，由 launch 文件用 spawn_entity 放进来。 -->
+<sdf version="1.6">
+  <world name="robocon">
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <!-- model://robocon_ground 能被找到，是因为 launch 里把 models/ 加进了 GAZEBO_MODEL_PATH -->
+    <include>
+      <uri>model://robocon_ground</uri>
+    </include>
+  </world>
+</sdf>
