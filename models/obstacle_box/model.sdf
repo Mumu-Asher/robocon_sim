@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- 测试避障用的障碍物：0.3 x 0.3 x 0.5 m 的橙色方块。
+     高 0.5 m，所以激光扫描面（离地约 0.23 m）一定能扫到它。static=true：撞上也不会被推走。 -->
+<sdf version="1.6">
+  <model name="obstacle_box">
+    <static>true</static>
+    <link name="link">
+      <collision name="collision">
+        <pose>0 0 0.25 0 0 0</pose>
+        <geometry><box><size>0.3 0.3 0.5</size></box></geometry>
+      </collision>
+      <visual name="visual">
+        <pose>0 0 0.25 0 0 0</pose>
+        <geometry><box><size>0.3 0.3 0.5</size></box></geometry>
+        <material><ambient>1 0.5 0 1</ambient><diffuse>1 0.5 0 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

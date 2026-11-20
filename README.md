@@ -160,3 +160,7 @@ lessons/, reference/          学习用的课程和速查表
 ```bash
 diff -q src/robocon_sim/config/nav2_params.yaml install/robocon_sim/share/robocon_sim/config/nav2_params.yaml && echo 一致
 ```
+
+
+
+把全局规划器从 NavFn 换成 **Smac 2D**

@@ -270,11 +270,19 @@ planner_server:
     expected_planner_frequency: 20.0
     use_sim_time: True
     planner_plugins: ["GridBased"]
+    # 【改】全局规划器从 NavFn 换成 Smac 2D。
+    # 原因：NavFn 会偶发/整体失效，报 "Failed to create a plan from potential when a legal potential
+    # was found"（M4 偶发，M5 堵路后所有目标都规划失败，包括不经过障碍的）。
+    # 要改回 NavFn：把下面 Smac 的块注释掉，取消注释最下面 NavFn 的块。
     GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
+      plugin: "nav2_smac_planner/SmacPlanner2D"
       tolerance: 0.5
-      use_astar: true                 # 【改】A* 比默认的 Dijkstra 快
-      allow_unknown: false            # 【改】不允许穿过未知区域。导航地图里本来就没有未知
+      allow_unknown: false            # 不允许穿过未知区域。导航地图里本来就没有未知
+    # GridBased:
+    #   plugin: "nav2_navfn_planner/NavfnPlanner"
+    #   tolerance: 0.5
+    #   use_astar: true
+    #   allow_unknown: false
 
 smoother_server:
   ros__parameters:
