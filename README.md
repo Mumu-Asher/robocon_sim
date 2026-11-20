@@ -2,7 +2,7 @@
 
 在 Gazebo Classic 里，让赛事小车（`robot_urdf`）在赛场（`robocon_ground`）里完成 2D 激光建图和自主导航。
 
-**当前能做到的**：一条命令启动仿真；遥控建图并保存；在 RViz2 里点目标点，小车自己走过去。
+**当前能做到的**：一条命令启动仿真；遥控建图并保存；在 RViz2 里点目标点，小车自己走过去；路上突然出现的障碍会绕开；一条路被完全堵死时，会从另一个方向绕远路到达目标。
 **当前做不到的**：仿真里不用 AMCL 定位、不模拟舵轮转向、不上斜坡。详见[已知限制](#已知限制)。
 
 ## 环境要求
@@ -12,8 +12,11 @@
 
 ```bash
 sudo apt install ros-humble-gazebo-ros-pkgs ros-humble-nav2-bringup ros-humble-slam-toolbox \
-                 ros-humble-teleop-twist-keyboard ros-humble-rviz2 ros-humble-robot-state-publisher
+                 ros-humble-nav2-smac-planner ros-humble-teleop-twist-keyboard \
+                 ros-humble-rviz2 ros-humble-robot-state-publisher
 ```
+
+> `ros-humble-nav2-smac-planner` 是全局规划器，**没装的话 Nav2 会因为找不到规划器插件而起不来**。
 
 - 生成导航地图的脚本需要 Python 的 `numpy` 和 `Pillow`（`pip install numpy pillow` 或 `apt install python3-numpy python3-pil`）。
 
@@ -97,13 +100,37 @@ ros2 launch robocon_sim nav.launch.py
 
 > 导航时没有启动 AMCL，而是发布一个恒等的 `map→odom`。这只在仿真里成立，原因见下面。
 
+**全局规划器用的是 Smac 2D**（`nav2_smac_planner/SmacPlanner2D`），不是 Nav2 默认的 NavFn。原因：NavFn 在这套地图上会整体失效，报 `Failed to create a plan from potential when a legal potential was found`，常见是对任何目标都规划不出路径；换成 Smac 2D 后没再出现，路径也更短。我们没有查清 NavFn 失效的内部原因，只是换掉了。要改回去：`config/nav2_params.yaml` 的 `planner_server` 里，把 Smac 的块注释掉，取消注释下面 NavFn 的那块。
+
+### 4. 测试避障
+
+包里带了一个方块障碍物模型 `models/obstacle_box`（0.3 × 0.3 × 0.5 m，橙色）。导航运行时，在 Gazebo 里放一个，看小车怎么绕：
+
+在 `ros2_ws` 目录下运行（命令里的 `src/...` 是相对路径）：
+
+```bash
+source /opt/ros/humble/setup.bash
+# 放一个方块（坐标换成你想放的位置）
+ros2 run gazebo_ros spawn_entity.py -entity obstacle1 \
+  -file src/robocon_sim/models/obstacle_box/model.sdf -x 4.7 -y -1.5 -z 0.0
+# 删除
+ros2 service call /delete_entity gazebo_msgs/srv/DeleteEntity "{name: obstacle1}"
+```
+
+要放多个，`-entity` 的名字不能重复（obstacle1、obstacle2……）。我们验证过的两种情况：
+- **突然出现的障碍**：小车走到附近时才放，它会实时绕开。
+- **整条走廊被堵死**：在西侧走廊 y=−1.5 处并排放 8 个方块（x 从 −5.5 到 −2.5），再把目标设到堵住的另一侧，小车会从反方向沿南、东、北三条走廊绕一整圈（约 26 m）到达。
+
+走廊宽度（用来判断方块会不会把路堵死）：南侧约 1.5 m、东侧约 2.5 m，车宽约 0.66 m。
+
 ## 目录
 
 ```
-ros2_ws/src/robocon_sim/     ROS 2 包（整个 ros2_ws 可以单独拷贝，不依赖外面的文件夹）
+robocon_sim/                  ROS 2 包（整个 ros2_ws 可以单独拷贝，不依赖外面的文件夹）
   models/
     robot_urdf/              小车模型（原样保留，仿真时由 launch 临时加工）
     robocon_ground/          赛场模型
+    obstacle_box/            测试避障用的方块障碍物
   launch/
     sim.launch.py            场地 + 小车 + 传感器 + 速度看门狗
     mapping.launch.py        sim + SLAM Toolbox + RViz2
@@ -120,8 +147,7 @@ ros2_ws/src/robocon_sim/     ROS 2 包（整个 ros2_ws 可以单独拷贝，不
     cmd_vel_watchdog.py      0.5 秒没新速度指令就停车
     auto_drive.py            按航点自动开车（建图用，不避障）
     reset.sh, reset_mapping.sh
-docs/两周项目计划.md          里程碑、实测结论、已知问题
-lessons/, reference/          学习用的课程和速查表
+  KNOWN_ISSUES.md            已知问题和限制（含实测数据）
 ```
 
 ## 仿真里做了哪些简化
@@ -132,11 +158,11 @@ lessons/, reference/          学习用的课程和速查表
 
 ## 已知限制
 
-完整列表和实测数据见 [docs/两周项目计划.md](docs/两周项目计划.md)，这里列最影响使用的：
+完整列表和实测数据见 [KNOWN_ISSUES.md](KNOWN_ISSUES.md)，这里列最影响使用的：
 
 1. **仿真里不能用 AMCL**。小车出生点只能看到中央高台的一面直墙，沿墙方向的位置分不出来，AMCL 的估计和真实位置相差 1.4 到 3.5 m。**上真车必须换回 AMCL 或 SLAM Toolbox 的定位模式**，并且要选一个能同时看到两面不平行墙的出生点。
 2. **边界墙雷达看不到**（墙只有 0.08 m 高，扫描面离地约 0.23 m）。试过把扫描面降低，车体会挡住 72% 的射线，建图失败。
-3. **偶发 `Goal failed`**：偶尔导航会失败，常在东侧圆柱附近，重新点一次目标通常就恢复。原因未查清。
+3. **NavFn 规划器会整体失效，已换成 Smac 2D**（见[导航](#3-导航)）。换了之后在自己的仿真里没再出现规划失败，但**失效原因没有查清**，也没有和 NavFn 在更多场景下对比。如果以后又出现 `Goal failed`，先用第 1 课的诊断顺序查，再考虑别的原因。
 4. IMU 的 z 加速度噪声大，现在没用到；做 FAST-LIO2 前要先解决。
 
 ## 常见问题
@@ -160,7 +186,3 @@ lessons/, reference/          学习用的课程和速查表
 ```bash
 diff -q src/robocon_sim/config/nav2_params.yaml install/robocon_sim/share/robocon_sim/config/nav2_params.yaml && echo 一致
 ```
-
-
-
-把全局规划器从 NavFn 换成 **Smac 2D**
